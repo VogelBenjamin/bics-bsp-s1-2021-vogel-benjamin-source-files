@@ -23,7 +23,7 @@ end = False
 clock = pygame.time.Clock()
 
 # dictionnary of all constants used during the simulation
-sim_const = {"initial_sheep": 10,"initial_wolves": 0,"food_cap": 2,
+sim_const = {"initial_sheep": 5,"initial_wolves": 0,"food_cap": 5,
              "food_respawn_time": 2,"number_cycles": 3,"sheep_speed": 2,
              "wolf_speed": 2,"simulation_speed": 10}
 
@@ -176,10 +176,16 @@ class Environment:
     
     def change_dir_All(self):
         for w in self.wolves:
-            w.change_dir()
+            if w.target == None:
+                w.change_dir_random()
+            else:
+                w.change_dir_target()
 
         for s in self.sheep:
-            s.change_dir()
+            if s.target == None:
+                s.change_dir_random()
+            else:
+                s.change_dir_target()
     
     def eat_All(self):
         for s in self.sheep:
@@ -225,6 +231,10 @@ class Environment:
         if len(self.food) < sim_const["food_cap"]:
             f = Food(random.randint(0,SIZE_X),random.randint(0,SIZE_Y))
             self.food.append(f)
+
+    def reset_target(self):
+        for element in self.wolves + self.sheep:
+            element.target = None
     
     # This methode spawns a new instance of an object if the attribute 
     # pregnant is true.
@@ -283,10 +293,14 @@ class Animal:
         self.y = y 
         self.speed = speed
         self.direction = random.random()*2*PI # random angle in radians
-        self.feed = False
         self.radius = 10
-        self.e = e
+
+        self.feed = False
         self.pregnant = False
+        
+        self.target = None
+        self.e = e
+        
 
     def move(self):
         '''
@@ -304,13 +318,31 @@ class Animal:
         elif self.y+self.radius < 0:
             self.y = SIZE_Y  
     
-    def change_dir(self):
+    def change_dir_random(self):
         '''
         changes direction of movement of the object by a value 
         between [-PI/2,PI/2]
         '''
         random_degree = random.choice([-1,1])*random.random()*0.5*PI
         self.direction += random_degree
+        
+    def change_dir_target(self):
+        other = self.target
+        dist = distance(self,other)
+        d_x = (other.x-self.x)/dist
+        d_y = (other.y-self.y)/dist
+        try:
+            self.direction = math.atan(d_y/d_x)
+        except:
+            if d_y >0:
+                self.direction = PI/2
+            elif d_y < 0:
+                self.direction = -PI/2
+            return True
+        if d_x < 0 and d_y > 0:
+            self.direction+=PI
+        elif d_x < 0 and d_y < 0:
+            self.direction+=PI
     
     def check_collision(self,other,distance = 0):
         '''
@@ -342,18 +374,15 @@ class Animal:
         if self.check_collision(other) and not self.feed:
             self.feed = True
             self.e.remove_from_lst(other)
+            self.e.reset_target()
             return True
         return False 
     
     def search_food(self,other):
-        if self.check_collision(other,5):
-            dist = distance(self,other)
-            d_x = (other.x-self.x)/dist
-            d_y = (other.y-self.y)/dist
+        if self.check_collision(other,50) and self.target == None and self.feed == False:
             
-            self.direction = math.atan(d_y/d_x)
-            return True
-        return False
+            self.target = other
+            
 
  
 class Sheep(Animal):
@@ -369,7 +398,7 @@ class Sheep(Animal):
         x = self.x
         y = self.y
         color = self.color
-
+        
         pygame.draw.circle(screen,color,(x,y),self.radius)
         pygame.draw.circle(screen,Color("Black"),(x,y),self.radius,2)
 
@@ -503,6 +532,10 @@ for i in range(sim_const["initial_sheep"]):
 for i in range(sim_const["initial_wolves"]):
     environment.add_Wolf(random.randint(0,SIZE_X),random.randint(0,SIZE_Y))
 
+for i in range(sim_const["food_cap"]):
+    environment.add_Food()
+
+
 # Visualisation and computation loop
 while not end:
     
@@ -516,14 +549,16 @@ while not end:
 
     #modify position of elements and draw them
     environment.draw_All()
+    environment.search_all()
+    if every_x_seconds(1):
+        environment.change_dir_All()
+        
     environment.move_All()
     environment.eat_All()
     environment.check_mate_all()
-    environment.search_all()
     
     #functions called every x seconds
-    if every_x_seconds(2):
-        environment.change_dir_All()
+    if every_x_seconds(1):
         environment.add_Food()
 
     if every_x_seconds(environment.cycle_duration*sim_const["simulation_speed"]/100):
