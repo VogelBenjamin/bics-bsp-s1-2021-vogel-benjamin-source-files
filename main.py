@@ -2,7 +2,10 @@
 import sys 
 import math 
 import random
+import subprocess
 from datetime import datetime
+
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pygame'])
 
 # Import 3rd party python modules
 import pygame
@@ -12,6 +15,8 @@ from pygame.locals import*
 pygame.init()
 
 # Decleration of variables
+
+num_lst = ["0","1","2","3","4","5","6","7","8","9"]
 
 # counter for frames
 frame_counter = 0
@@ -23,9 +28,10 @@ end = False
 clock = pygame.time.Clock()
 
 # dictionnary of all constants used during the simulation
-sim_const = {"initial_sheep": 5,"initial_wolves": 0,"food_cap": 5,
+sim_const = {"initial_sheep": 30,"initial_wolves": 8,"food_cap": 30,
              "food_respawn_time": 2,"number_cycles": 3,"sheep_speed": 2,
-             "wolf_speed": 2,"simulation_speed": 10}
+             "wolf_speed": 2,"sim_speed": 1,"search_radius": 1000,
+             "cycle_duration":100}
 
 # miscelaneous constants
 PI = math.pi
@@ -35,10 +41,8 @@ SIZE_X = 1400
 SIZE_Y = 800
 
 
-
-
 # Decleration of functions
-def ask_constant():
+def modify_constants():
     
     print("Default values:")
     # Displays the names and values of the simulation constants
@@ -49,28 +53,32 @@ def ask_constant():
     while True:
         # Ask the user whether a change of constants is desired
         question = input("Do you want to change any constants?(0-no;1-yes): ")
-        if question == "0":
-            break
-        elif question != "1":
-            print("Invalid answer, please try again!")
+        try:
+            if question == "0":
+                break
+            elif question != "1":
+                raise Exception("Invalid answer, please try again!")
+        except Exception as error:
+            print(error)
             continue
+
 
         # If change of constants is desired, the program asks what constant 
         # should be changed
         while True:
             #to_be_changed
-            t_b_c = input("Which constant do you want to change?: ")
-            if t_b_c not in sim_const:
-                print("Variable name not found! Try again!")
-                continue
-            
             try:
-                n_v = int(input(f"Input value for {t_b_c}: "))
-                sim_const[t_b_c] = n_v
-                
-            except:
-                print(f"Invalid value for {t_b_c}")
-                continue
+                t_b_c = input("Which constant do you want to change?: ")
+                if t_b_c not in sim_const:
+                    raise Exception("Variable name not found! Try again!")
+                n_v = input(f"Input value for {t_b_c}: ")
+                for letter in n_v:
+                    if letter not in num_lst:
+                        raise Exception(f"{n_v} is invalid input")
+                sim_const[t_b_c] = int(n_v)
+                break
+            except Exception as error:
+                print(error)
 
 
 # returns True for every x seconds
@@ -125,6 +133,7 @@ def write_csv(information):
             file.write("\n")
     file.write("\n\n")
     file.close()
+    print("Document successfully created")
 
 def add_information(info):
     '''
@@ -132,7 +141,7 @@ def add_information(info):
     key is delta time
     '''
     n_t = datetime.now()
-    delta = (n_t - S_T)*sim_const["simulation_speed"]
+    delta = (n_t - S_T)*sim_const["sim_speed"]
     sim_info[delta] = info
 
 def distance(point_1,point_2):
@@ -144,13 +153,11 @@ def distance(point_1,point_2):
 
 class Environment:
     
-    def __init__(self,cycle_duration = 100):
+    def __init__(self):
         self.wolves = []
         self.sheep = []
         self.food = []
         self.cycle_obj = Countdown(self)
-        self.cycle_frame_counter = sim_const["number_cycles"]
-        self.cycle_duration = cycle_duration
     
     # The following methodes call the methodes of the objects Wolf and Sheep 
     # contained in this objects lists.
@@ -229,7 +236,7 @@ class Environment:
     
     def add_Food(self):
         if len(self.food) < sim_const["food_cap"]:
-            f = Food(random.randint(0,SIZE_X),random.randint(0,SIZE_Y))
+            f = Food(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
             self.food.append(f)
 
     def reset_target(self):
@@ -241,13 +248,12 @@ class Environment:
     def check_birth(self):
         for w in self.wolves:
             if w.pregnant:
-                self.add_Wolf(w.x,w.y)
+                self.add_Wolf(w.x, w.y)
                 w.pregnant = False
 
         for s in self.sheep:
             if s.pregnant:
-                for i in range(random.randint(1,4)):
-                    self.add_Sheep(s.x,s.y)
+                self.add_Sheep(s.x, s.y)
                 s.pregnant = False
     
     # checks whether animals have found food, if not --> remove from list
@@ -261,14 +267,14 @@ class Environment:
                 self.remove_from_lst(s)
 
     # checks the class of an object and removes it from corresponding list
-    def remove_from_lst(self,other):
+    def remove_from_lst(self, other):
         lst = []
 
-        if isinstance(other,Food):
+        if isinstance(other, Food):
             lst = self.food
-        elif isinstance(other,Wolf):
+        elif isinstance(other, Wolf):
             lst = self.wolves
-        elif isinstance(other,Sheep):
+        elif isinstance(other, Sheep):
             lst = self.sheep
 
         lst.remove(other)
@@ -278,29 +284,44 @@ class Environment:
         for anim in self.sheep+self.wolves:
             anim.feed = False
 
-    def end_of_cycle_functions(self):
+    def end_of_cycle(self):
         self.check_birth()
-        self.make_hungry()
         self.check_survival()
+        self.make_hungry()
+        
     
     
-
-
 class Animal:
     
-    def __init__(self,x,y,speed,e):
+    def __init__(self, x, y, speed, e):
         self.x = x
         self.y = y 
         self.speed = speed
         self.direction = random.random()*2*PI # random angle in radians
         self.radius = 10
+        self.sex = random.choice(["m","w"])
 
         self.feed = False
         self.pregnant = False
         
         self.target = None
         self.e = e
-        
+
+
+    def draw(self):
+        '''
+        displays the object onto the pygame screen
+        '''
+        x = self.x
+        y = self.y
+        color = self.color
+
+        pygame.draw.circle(screen, color, (x,y), self.radius)
+        pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 2)
+
+        if self.feed == True:
+            pygame.draw.circle(screen, Color("blue"),(x,y),4)
+
 
     def move(self):
         '''
@@ -333,18 +354,19 @@ class Animal:
         d_y = (other.y-self.y)/dist
         try:
             self.direction = math.atan(d_y/d_x)
+            if d_x < 0 and d_y > 0:
+                self.direction+=PI
+            elif d_x < 0 and d_y < 0:
+                self.direction+=PI
         except:
             if d_y >0:
                 self.direction = PI/2
             elif d_y < 0:
                 self.direction = -PI/2
-            return True
-        if d_x < 0 and d_y > 0:
-            self.direction+=PI
-        elif d_x < 0 and d_y < 0:
-            self.direction+=PI
+            
+        
     
-    def check_collision(self,other,distance = 0):
+    def check_collision(self, other, distance = 0):
         '''
         takes an object wiht coordinates as input
         checks if objects is colliding with another one
@@ -355,16 +377,17 @@ class Animal:
             return True
         return False
     
-    def mate(self,other):
+    def mate(self, other):
         '''
         takes an object of the same class as input
         checks whether or not both objects' feed attribute is true, 
         if so puts pregnant attribute to true
         '''
-        if self.feed and other.feed and self.check_collision(other):
+        if (self.feed and other.feed and self.check_collision(other) and 
+           self.sex != other.sex):
             self.pregnant = True
 
-    def eat(self,other):
+    def eat(self, other):
         '''
         takes as input a food object
         checks if it collides, if so food objects gets removed and this 
@@ -378,54 +401,33 @@ class Animal:
             return True
         return False 
     
-    def search_food(self,other):
-        if self.check_collision(other,50) and self.target == None and self.feed == False:
-            
+    def search_food(self, other):
+        s = self
+        t = self.target
+        if (self.check_collision(other, sim_const["search_radius"]) and 
+            (t == None or distance(s,t)>distance(s,other)) 
+            and self.feed == False):
             self.target = other
             
-
  
 class Sheep(Animal):
     
-    def __init__(self,x,y,speed,e):
-        Animal.__init__(self,x,y,speed,e)
+    def __init__(self, x, y, speed, e):
+        Animal.__init__(self, x, y, speed, e)
         self.color = Color("Yellow")
-    
-    def draw(self):
-        '''
-        displays the object onto the pygame screen
-        '''
-        x = self.x
-        y = self.y
-        color = self.color
-        
-        pygame.draw.circle(screen,color,(x,y),self.radius)
-        pygame.draw.circle(screen,Color("Black"),(x,y),self.radius,2)
 
 
 class Wolf(Animal):
     
-    def __init__(self,x,y,speed,e):
-        Animal.__init__(self,x,y,speed,e)
+    def __init__(self, x, y, speed, e):
+        Animal.__init__(self, x, y, speed, e)
         self.color = Color("Gray")
     
-    def draw(self):
-        '''
-        displays the object onto the pygame screen
-        '''
-        x = self.x
-        y = self.y
-        color = self.color
-
-        pygame.draw.circle(screen,color,(x,y),self.radius)
-        pygame.draw.circle(screen,Color("Black"),(x,y),self.radius,2)
     
     
-
-
 class Food:
     
-    def __init__(self,x,y):
+    def __init__(self, x, y):
         self.x = x
         self.y = y
         self.color = Color("Red")
@@ -438,19 +440,21 @@ class Food:
         x = self.x
         y = self.y
 
-        pygame.draw.circle(screen,self.color,(x,y),self.radius)
-        pygame.draw.circle(screen,Color("Black"),(x,y),self.radius,1)
+        pygame.draw.circle(screen, self.color, (x,y), self.radius)
+        pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 1)
+
+        
 
 
 class Countdown:
     
-    def __init__(self,e):
+    def __init__(self, e):
         self.x = SIZE_X *19 // 20
         self.y = SIZE_Y // 20
         self.completion = 0
         self.num_finished_cycles = 0
         self.environment = e
-        self.text_box = TextBox(self.x, abs(self.y-SIZE_Y),"Cycle")
+        self.text_box = TextBox( f"Cycle_num = {self.num_finished_cycles+1}")
     
     def draw(self):
         '''
@@ -458,8 +462,9 @@ class Countdown:
         '''
         d_r = pygame.draw.rect
         s_x, s_y, s_c = self.x, self.y, self.completion
-        d_r(screen,Color("Gray"),(s_x,s_y,SIZE_X//40,SIZE_Y*0.6))
-        d_r(screen,Color("Purple"),(s_x,s_y,SIZE_X//40,SIZE_Y*0.6*s_c//100))
+        d_r(screen, Color("Gray"), (s_x,s_y,SIZE_X//36,SIZE_Y*0.6))
+        d_r(screen, Color("Purple"), (s_x,s_y,SIZE_X//36,SIZE_Y*0.6*s_c//100))
+        self.text_box.display()
     
     def tick(self):
         '''
@@ -473,64 +478,67 @@ class Countdown:
         if self.completion == 100:
             self.completion = 0
             self.num_finished_cycles += 1
-            self.environment.end_of_cycle_functions()    
-            
-            n_c = sim_const["number_cycles"]
+            self.environment.end_of_cycle()    
+            self.text_box.change_txt(f"Cycle_num = {self.num_finished_cycles+1}")
             
             num_of_food = len(environment.food)
             num_of_wolves = len(environment.wolves)
             num_of_sheep = len(environment.sheep)
             num_of_cycle = environment.cycle_obj.num_finished_cycles
-            add_information([num_of_cycle,num_of_sheep,num_of_wolves,num_of_food])
+
+            add_information([num_of_cycle,num_of_sheep,
+                             num_of_wolves,num_of_food])
 
 
 class TextBox:
     
-    def __init__(self,x,y,text,font=pygame.font.SysFont("Palatino",30)):
-        self.x = x
-        self.y = y 
+    def __init__(self, text, font=pygame.font.SysFont("Palatino",20)):
+        self.x = SIZE_X *  13 // 14
+        self.y = SIZE_Y * 2 // 3
         self.font = font
-        self.text = font.render(text,True,"black")
+        self.text = font.render(text, True, "black")
     
     def display(self):
         '''
         displays text on pygame screen
         '''
-        screen.blit(self.text,(self.x,self.y))
+        screen.blit(self.text, (self.x,self.y))
     
-    def change_txt(self,txt):
+    def change_txt(self, txt):
         '''
         changes the text of the textbox
         '''
-        self.text = self.font.render(txt,True,"black")
+        self.text = self.font.render(txt, True, "black")
 
-
-ask_constant()
+#asks the user if he wants to change ismulation constants
+modify_constants()
 
 # reference of time
 S_T = datetime.now() #Start time
 
 # Number of frames, per second. Incrementing FPS causes the simulation to 
 # perform faster.
-FPS = 60*sim_const["simulation_speed"]
+FPS = 60*sim_const["sim_speed"]
 
 # dictionary that stores all occurences.
 sim_info = {"constants": sim_const,}
 
-#Create instances of Environment and class elements
-environment = Environment(sim_const["number_cycles"])
-
 # initialize a window or screen for display
 screen = pygame.display.set_mode((SIZE_X,SIZE_Y))
+
+#Create instances of Environment and class elements
+environment = Environment()
+
+
 
 # set the current window caption
 pygame.display.set_caption("vogel.benjamin: BSP-1")
 
 for i in range(sim_const["initial_sheep"]):
-    environment.add_Sheep(random.randint(0,SIZE_X),random.randint(0,SIZE_Y))
+    environment.add_Sheep(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
 
 for i in range(sim_const["initial_wolves"]):
-    environment.add_Wolf(random.randint(0,SIZE_X),random.randint(0,SIZE_Y))
+    environment.add_Wolf(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
 
 for i in range(sim_const["food_cap"]):
     environment.add_Food()
@@ -550,10 +558,13 @@ while not end:
     #modify position of elements and draw them
     environment.draw_All()
     environment.search_all()
+
     if every_x_seconds(1):
         environment.change_dir_All()
         
     environment.move_All()
+
+    #animal behaviour methods execution
     environment.eat_All()
     environment.check_mate_all()
     
@@ -561,24 +572,33 @@ while not end:
     if every_x_seconds(1):
         environment.add_Food()
 
-    if every_x_seconds(environment.cycle_duration*sim_const["simulation_speed"]/100):
+    if every_x_seconds(sim_const["cycle_duration"]/(sim_const["sim_speed"]*100)):
         environment.cycle_obj.tick()
 
-    frame_counter += sim_const["simulation_speed"]
+    #amount added to frame counter proportional to simulation speed.
+    frame_counter += sim_const["sim_speed"]
 
     pygame.display.update()
     clock.tick(FPS)
 
-    if environment.cycle_obj.num_finished_cycles == sim_const["number_cycles"]:
+    #check whether the simulation has ended
+    if environment.cycle_obj.num_finished_cycles==sim_const["number_cycles"]:
         
         end = True
 
 #stops all pygame functionallities
 pygame.quit()
 
+# asks the user whether he wants to create a csv/ add information to a csv about the simulation.
 print("Simulation is done!")
-qt = int(input("Create csv file about the simulation?(0-no;1-yes): "))
-if qt:
-    write_csv(sim_info)
+while True:
+    try:
+        qt = int(input("Create csv file about the simulation?(0-no;1-yes): "))
+        if qt:
+            write_csv(sim_info)
+        break
+    except:
+        print("invalid answer! Please try again!")
+        continue
 
 sys.exit()
