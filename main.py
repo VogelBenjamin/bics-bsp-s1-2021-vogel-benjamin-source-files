@@ -2,10 +2,8 @@
 import sys 
 import math 
 import random
-import subprocess
 from datetime import datetime
 
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'pygame'])
 
 # Import 3rd party python modules
 import pygame
@@ -28,10 +26,10 @@ end = False
 clock = pygame.time.Clock()
 
 # dictionnary of all constants used during the simulation
-sim_const = {"initial_sheep": 30,"initial_wolves": 8,"food_cap": 30,
-             "food_respawn_time": 2,"number_cycles": 3,"sheep_speed": 2,
-             "wolf_speed": 2,"sim_speed": 1,"search_radius": 1000,
-             "cycle_duration":100}
+sim_const = {"initial_sheep": 40,"initial_wolves": 10,"food_cap": 30,
+             "food_respawn_time": 1,"number_cycles": 3,"sheep_speed": 2,
+             "wolf_speed": 2,"sim_speed": 10,"search_radius": 1000,
+             "cycle_duration":100,"special_attribute_prob":20}
 
 # miscelaneous constants
 PI = math.pi
@@ -73,8 +71,11 @@ def modify_constants():
                     raise Exception("Variable name not found! Try again!")
                 n_v = input(f"Input value for {t_b_c}: ")
                 for letter in n_v:
-                    if letter not in num_lst:
+                    if (letter not in num_lst):
                         raise Exception(f"{n_v} is invalid input")
+                    elif ("prob" in t_b_c and n_v > 100):
+                        raise Exception(f"{n_v} is invalid input, value<=100")
+                    
                 sim_const[t_b_c] = int(n_v)
                 break
             except Exception as error:
@@ -103,7 +104,7 @@ def remove_from_lst(l,r_l):
 
 def write_csv(information):
     '''
-    takes in a dictionary of inforamtion and either creates a csv file if
+    takes in a dictionary of information and either creates a csv file if
     there does not already exist one or appends information into an existing
     csv
     '''
@@ -121,9 +122,11 @@ def write_csv(information):
 
     file.write("\n")
     
-    l = ["timestamp","cycle","num_sheep","numb_wolves","num_food"]
+    l = ["timestamp","cycle","num_sheep","num_of_huge_sheep","numb_wolves","num_of_speed_wolves","num_food"]
 
-    file.write(f"{l[0]},{l[1]},{l[2]},{l[3]},{l[4]},\n")
+    for i in range(len(l)):
+        file.write(f"{l[i]},")
+    file.write(f"\n")
 
     for key,item in information.items():
         if key != "constants":
@@ -205,39 +208,49 @@ class Environment:
 
     def check_mate_all(self):
         for s1 in self.sheep:
-            if s1.feed == True:
+            if s1.feed == True and s1.sex == "w":
                 for s2 in remove_from_lst(self.sheep,s1):
-                    s1.mate(s2)
+                    if s2.sex == "m":
+                        s1.mate(s2)
         
         for w1 in self.wolves:
-            if w1.feed == True:
+            if w1.feed == True and w1.sex == "w":
                 for w2 in remove_from_lst(self.wolves,w1):
-                    w1.mate(w2)
+                    if w2.sex == "m":
+                        w1.mate(w2)
 
     def search_all(self):
         for s in self.sheep:
                 for f in self.food:
-                    s.search_food(f)
+                    s.search_target(f)
 
         for w in self.wolves:
             for s in self.sheep:
-                w.search_food(s)
+                w.search_target(s)
 
     # The following methodes add an instance of a class to this objects list 
     # corresponding to the class.
 
     def add_Wolf(self, x, y):
-        w = Wolf(x,y,sim_const["wolf_speed"],self)
+        if random.random() > sim_const["special_attribute_prob"]*0.005:
+            w = Wolf(x,y,sim_const["wolf_speed"],self)
+        else:
+            w = Speed_wolf(x,y,sim_const["wolf_speed"],self)
         self.wolves.append(w)
     
     def add_Sheep(self, x, y):
-        s = Sheep(x,y,sim_const["sheep_speed"],self)
-        self.sheep.append(s)
+        for i in range(random.randint(1,3)):
+            if random.random() > sim_const["special_attribute_prob"]*0.01:
+                s = Sheep(x,y,sim_const["sheep_speed"],self)
+            else:
+                s = Huge_sheep(x,y,sim_const["sheep_speed"],self)
+            self.sheep.append(s)
     
     def add_Food(self):
-        if len(self.food) < sim_const["food_cap"]:
-            f = Food(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
-            self.food.append(f)
+        for i in range(5):
+            if len(self.food) < sim_const["food_cap"]:
+                f = Food(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
+                self.food.append(f)
 
     def reset_target(self):
         for element in self.wolves + self.sheep:
@@ -272,9 +285,9 @@ class Environment:
 
         if isinstance(other, Food):
             lst = self.food
-        elif isinstance(other, Wolf):
+        elif isinstance(other, Wolf) or isinstance(other,Speed_wolf):
             lst = self.wolves
-        elif isinstance(other, Sheep):
+        elif isinstance(other, Sheep) or isinstance(other,Huge_sheep):
             lst = self.sheep
 
         lst.remove(other)
@@ -298,11 +311,12 @@ class Animal:
         self.y = y 
         self.speed = speed
         self.direction = random.random()*2*PI # random angle in radians
-        self.radius = 10
+        self.radius = 7
         self.sex = random.choice(["m","w"])
 
         self.feed = False
         self.pregnant = False
+        self.special = False
         
         self.target = None
         self.e = e
@@ -320,7 +334,7 @@ class Animal:
         pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 2)
 
         if self.feed == True:
-            pygame.draw.circle(screen, Color("blue"),(x,y),4)
+            pygame.draw.circle(screen, Color("blue"),(x,y),1)
 
 
     def move(self):
@@ -394,20 +408,36 @@ class Animal:
         objects feed attribute becomes true
         '''
 
-        if self.check_collision(other) and not self.feed:
+        if (self.check_collision(other) and not self.feed and 
+            not isinstance(other, Huge_sheep)):
             self.feed = True
             self.e.remove_from_lst(other)
             self.e.reset_target()
             return True
         return False 
     
-    def search_food(self, other):
+    def search_target(self, other):
         s = self
         t = self.target
         if (self.check_collision(other, sim_const["search_radius"]) and 
-            (t == None or distance(s,t)>distance(s,other)) 
-            and self.feed == False):
-            self.target = other
+            (t == None or distance(s,t)>distance(s,other))):
+
+            if self.feed == False and isinstance(other,Food):
+                # makes sure that an object is the target of maximum 3 
+                # other objects
+                counter = 0
+
+                for anim in (environment.sheep):
+                    if anim.target == other:
+                        counter += 1
+                    if counter > 3:
+                        return
+                self.target = other
+            
+            elif self.feed == True and other in environment.sheep:
+                if other.sex != self.sex:
+
+                    self.target = other
             
  
 class Sheep(Animal):
@@ -423,6 +453,40 @@ class Wolf(Animal):
         Animal.__init__(self, x, y, speed, e)
         self.color = Color("Gray")
     
+
+class Huge_sheep(Animal):
+
+    def __init__(self, x, y, speed, e):
+        Animal.__init__(self, x, y, speed//2, e)
+        self.color = Color("lightblue")
+        self.special = True
+        self.radius += 3
+            
+
+class Speed_wolf(Animal):
+
+    def __init__(self, x, y, speed, e):
+        Animal.__init__(self, x, y, speed*2, e)
+        self.color = Color("violetred")
+        self.food_count = 0
+        self.special = True
+
+    def eat(self,other):
+        '''
+        takes as input a food object 
+        checks if it collides, if so food objects gets removed and this 
+        objects feed attribute becomes true
+        '''
+
+        if (self.check_collision(other) and not self.feed and 
+            not isinstance(other, Huge_sheep)):
+            self.food_count += 1
+            self.e.remove_from_lst(other)
+            self.e.reset_target()
+            if self.food_count >= 2:
+                self.feed = True
+            return True
+        return False 
     
     
 class Food:
@@ -482,12 +546,22 @@ class Countdown:
             self.text_box.change_txt(f"Cycle_num = {self.num_finished_cycles+1}")
             
             num_of_food = len(environment.food)
-            num_of_wolves = len(environment.wolves)
-            num_of_sheep = len(environment.sheep)
+            num_of_n_wolves,num_of_speed_wolves = 0,0
+            num_of_n_sheep,num_of_huge_sheep = 0,0
+            for w in environment.wolves:
+                if w.special == False:
+                    num_of_n_wolves += 1
+                else:
+                    num_of_speed_wolves += 1
+            for s in environment.sheep:
+                if s.special == False:
+                    num_of_n_sheep += 1
+                else:
+                    num_of_huge_sheep += 1
             num_of_cycle = environment.cycle_obj.num_finished_cycles
 
-            add_information([num_of_cycle,num_of_sheep,
-                             num_of_wolves,num_of_food])
+            add_information([num_of_cycle,num_of_n_sheep,num_of_huge_sheep,
+                             num_of_n_wolves,num_of_speed_wolves,num_of_food])
 
 
 class TextBox:
@@ -529,10 +603,8 @@ screen = pygame.display.set_mode((SIZE_X,SIZE_Y))
 #Create instances of Environment and class elements
 environment = Environment()
 
-
-
 # set the current window caption
-pygame.display.set_caption("vogel.benjamin: BSP-1")
+pygame.display.set_caption("vogel.benjamin: BSP-S1")
 
 for i in range(sim_const["initial_sheep"]):
     environment.add_Sheep(random.randint(0,SIZE_X), random.randint(0,SIZE_Y))
@@ -559,8 +631,10 @@ while not end:
     environment.draw_All()
     environment.search_all()
 
+    #functions called every x seconds
     if every_x_seconds(1):
         environment.change_dir_All()
+        environment.add_Food()
         
     environment.move_All()
 
@@ -568,10 +642,6 @@ while not end:
     environment.eat_All()
     environment.check_mate_all()
     
-    #functions called every x seconds
-    if every_x_seconds(1):
-        environment.add_Food()
-
     if every_x_seconds(sim_const["cycle_duration"]/(sim_const["sim_speed"]*100)):
         environment.cycle_obj.tick()
 
