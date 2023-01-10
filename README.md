@@ -1,5 +1,8 @@
 # bics-bsp-s1-2022-vogel-benjamin-source-files
 
+## repository content
+This repository contains the source code for my BSP-S1 project as well as a reqirements.txt document containing the libraries installed during the production process of the software. 
+Furthermore you can find the source code to my report LaTeX file for my BSP-S1
 
 ## Code execution
 First make sure your version of python is 3.10.7.
