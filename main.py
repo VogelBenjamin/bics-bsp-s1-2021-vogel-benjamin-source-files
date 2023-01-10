@@ -6,20 +6,25 @@ from datetime import datetime
 
 
 # Import 3rd party python modules
-import pygame
-from pygame.locals import*
+try:
+    import pygame
+    from pygame.locals import*
+except:
+    print("It seems you do not have the pygame library installed on your operating system")
+    print("Please refer to the requirements.txt file found at: \" https://github.com/VogelBenjamin/bics-bsp-s1-2022-vogel-benjamin-public-files \"")
 
 # initialize all imported pygame modules
 pygame.init()
 
 # Decleration of variables
 
+#list of all digits
 num_lst = ["0","1","2","3","4","5","6","7","8","9"]
 
 # counter for frames
 frame_counter = 0
 
-# boolean - if end = True the program terminates
+# boolean - if end = True the simulation stops
 end = False
 
 # create an object to help track time
@@ -27,7 +32,7 @@ clock = pygame.time.Clock()
 
 # dictionnary of all constants used during the simulation
 sim_const = {"initial_sheep": 40,"initial_wolves": 10,"food_cap": 30,
-             "food_respawn_time": 1,"number_cycles": 3,"sheep_speed": 2,
+             "food_respawn_time": 1,"number_cycles": 5,"sheep_speed": 2,
              "wolf_speed": 2,"sim_speed": 10,"search_radius": 1000,
              "cycle_duration":100,"special_attribute_prob":20}
 
@@ -64,20 +69,34 @@ def modify_constants():
         # If change of constants is desired, the program asks what constant 
         # should be changed
         while True:
-            #to_be_changed
+            # checks whether input is valid, if not jumps to exception and 
+            # repeats process until successful
             try:
+                # to_be_changed
                 t_b_c = input("Which constant do you want to change?: ")
+                
+                # checks if the input string is a key inside the constant dictionary
                 if t_b_c not in sim_const:
                     raise Exception("Variable name not found! Try again!")
+
+                # new value for the constant
                 n_v = input(f"Input value for {t_b_c}: ")
+
+                # checks if the input is a number by checking if each entry 
+                # is a digit
                 for letter in n_v:
+                    # raises an error if the input is invalid
                     if (letter not in num_lst):
                         raise Exception(f"{n_v} is invalid input")
-                    elif ("prob" in t_b_c and n_v > 100):
+                    # if one of the constants is percentage based and the new 
+                    # value is larger than 100, then the program specifies the
+                    # problem
+                    elif ("prob" in t_b_c and int(n_v) > 100):
                         raise Exception(f"{n_v} is invalid input, value<=100")
                     
                 sim_const[t_b_c] = int(n_v)
                 break
+
             except Exception as error:
                 print(error)
 
@@ -95,7 +114,7 @@ def every_x_seconds(x):
 def remove_from_lst(l,r_l):
     '''
     takes list as input
-    returns the same list without the elements inside the parameter
+    returns a copy of the list without the elements inside the parameter
     '''
     n_l = l.copy()
     n_l.remove(r_l)
@@ -108,26 +127,37 @@ def write_csv(information):
     there does not already exist one or appends information into an existing
     csv
     '''
+    # creates a text file in the directory of the software called 
+    # animal_sim_csv. If file already exists, existing file will be used
     file = open("animal_sim_csv.txt","a")
 
+    # add Time/Date
     file.write(str(S_T)+"\n")
 
+    # displays a line containing all the names of the constants
     for key in information["constants"].keys():
         file.write(f"{key},")
 
     file.write("\n")
 
+    # then in the second line the value for each constant is given
     for value in information["constants"].values():
         file.write(f"{value},")
 
     file.write("\n")
     
-    l = ["timestamp","cycle","num_sheep","num_of_huge_sheep","numb_wolves","num_of_speed_wolves","num_food"]
+    # list of names of the information of the simulation 
+    l = ["timestamp","cycle","num_sheep","num_of_huge_sheep","numb_wolves",
+         "num_of_speed_wolves","num_food"]
 
+    # prints the list above in a line
     for i in range(len(l)):
         file.write(f"{l[i]},")
     file.write(f"\n")
 
+    # prints the timestamp of the end of the cycle(key), then the elements of
+    # the list which is assigned to the value of the key containing the
+    # acctual information
     for key,item in information.items():
         if key != "constants":
             file.write(f"{key},")
@@ -148,6 +178,7 @@ def add_information(info):
     sim_info[delta] = info
 
 def distance(point_1,point_2):
+    # returning the distance between the two points
     return math.sqrt((point_1.x-point_2.x)**2+(point_1.y-point_2.y)**2)
 
 
@@ -157,14 +188,19 @@ def distance(point_1,point_2):
 class Environment:
     
     def __init__(self):
+        # the lists contains all instances of their respective object
         self.wolves = []
         self.sheep = []
         self.food = []
+
+        # the countdown object allows for cycle management during the
+        # simulation
         self.cycle_obj = Countdown(self)
     
     # The following methodes call the methodes of the objects Wolf and Sheep 
     # contained in this objects lists.
 
+    # displays all objects on the canvas/window
     def draw_All(self):
         for w in self.wolves:
             w.draw()
@@ -177,6 +213,7 @@ class Environment:
 
         self.cycle_obj.draw()
     
+    # displaces all animals
     def move_All(self):
         for w in self.wolves:
             w.move()
@@ -184,7 +221,12 @@ class Environment:
         for s in self.sheep:
             s.move()
     
+    # modifies the direction of all animals
     def change_dir_All(self):
+        '''
+        If the animal does not have a target it changes direction randomly
+        Otherwise it changes it direction towards its target
+        '''
         for w in self.wolves:
             if w.target == None:
                 w.change_dir_random()
@@ -197,6 +239,7 @@ class Environment:
             else:
                 s.change_dir_target()
     
+    # checks for all animals if an animal has eaten something
     def eat_All(self):
         for s in self.sheep:
             for f in self.food:
@@ -206,6 +249,7 @@ class Environment:
             for s in self.sheep:
                 w.eat(s)
 
+    # checks if two animals of the same species and opposit sex collide
     def check_mate_all(self):
         for s1 in self.sheep:
             if s1.feed == True and s1.sex == "w":
@@ -219,6 +263,7 @@ class Environment:
                     if w2.sex == "m":
                         w1.mate(w2)
 
+    # for each animal, searches if a possible target is within target range
     def search_all(self):
         for s in self.sheep:
                 for f in self.food:
@@ -228,22 +273,40 @@ class Environment:
             for s in self.sheep:
                 w.search_target(s)
 
+    # checks whether the helpersheep aid another sheep
+    def check_assist(self):
+        for s1 in self.sheep:
+            
+            # first checks whether sheep is helper sheep to avoid 
+            # unecessary iterations
+            if isinstance(s1,HelperSheep):
+                # iterates through all other animals 
+                for s2 in self.sheep:
+                    # calls assist methode of the helpersheep
+                    s1.assist_sheep(s2)
+
     # The following methodes add an instance of a class to this objects list 
     # corresponding to the class.
-
-    def add_Wolf(self, x, y):
+    
+    def add_Wolf(self, x, y, sp = False):
+        # check probablility if the new animal has a special trait
         if random.random() > sim_const["special_attribute_prob"]*0.005:
             w = Wolf(x,y,sim_const["wolf_speed"],self)
         else:
-            w = Speed_wolf(x,y,sim_const["wolf_speed"],self)
+            w = SpeedWolf(x,y,sim_const["wolf_speed"],self)
         self.wolves.append(w)
     
-    def add_Sheep(self, x, y):
+    def add_Sheep(self, x, y, sp = False):
+        # sheep can birth 1-3 chidlren
         for i in range(random.randint(1,3)):
+            # check probablility if the new animal has a special trait
             if random.random() > sim_const["special_attribute_prob"]*0.01:
                 s = Sheep(x,y,sim_const["sheep_speed"],self)
             else:
-                s = Huge_sheep(x,y,sim_const["sheep_speed"],self)
+                if random.random() > 0.5:
+                    s = HugeSheep(x,y,sim_const["sheep_speed"],self)
+                else:
+                    s = HelperSheep(x,y,sim_const["sheep_speed"],self)
             self.sheep.append(s)
     
     def add_Food(self):
@@ -260,13 +323,19 @@ class Environment:
     # pregnant is true.
     def check_birth(self):
         for w in self.wolves:
+            sp = False
             if w.pregnant:
-                self.add_Wolf(w.x, w.y)
+                if w.special:
+                    sp = True
+                self.add_Wolf(w.x, w.y,sp)
                 w.pregnant = False
 
         for s in self.sheep:
+            sp = False
             if s.pregnant:
-                self.add_Sheep(s.x, s.y)
+                if s.special:
+                    sp = True
+                self.add_Sheep(s.x, s.y, sp)
                 s.pregnant = False
     
     # checks whether animals have found food, if not --> remove from list
@@ -285,9 +354,10 @@ class Environment:
 
         if isinstance(other, Food):
             lst = self.food
-        elif isinstance(other, Wolf) or isinstance(other,Speed_wolf):
+        elif isinstance(other, Wolf) or isinstance(other,SpeedWolf):
             lst = self.wolves
-        elif isinstance(other, Sheep) or isinstance(other,Huge_sheep):
+        elif (isinstance(other, Sheep) or isinstance(other,HugeSheep) or
+              isinstance(other,HelperSheep)):
             lst = self.sheep
 
         lst.remove(other)
@@ -297,28 +367,69 @@ class Environment:
         for anim in self.sheep+self.wolves:
             anim.feed = False
 
+    # functions to be called at the end of cycle
     def end_of_cycle(self):
         self.check_birth()
         self.check_survival()
         self.make_hungry()
+
+    # creates a dictionary containing relevant information on the current
+    # state of the environment
+    def create_info_lst(self):
+        # get the number of food currently in the environmetn
+        num_of_food = len(self.food)
+
+        num_of_n_wolves,num_of_speed_wolves = 0,0
+        num_of_n_sheep,num_of_huge_sheep = 0,0
+
+        # loops thorugh all sheep and wolves and categorises them between
+        # normal and special types
+        for w in self.wolves:
+            if w.special == False:
+                num_of_n_wolves += 1
+            else:
+                num_of_speed_wolves += 1
+        
+        for s in self.sheep:
+            if s.special == False:
+                num_of_n_sheep += 1
+            else:
+                num_of_huge_sheep += 1
+        
+        # number of the informtation belonging to the cycle is gotten from
+        # the countdown class
+        num_of_cycle = self.cycle_obj.num_finished_cycles
+
+        # returns a list containing all the information gathered
+        return [num_of_cycle,num_of_n_sheep,num_of_huge_sheep,
+                num_of_n_wolves,num_of_speed_wolves,num_of_food]
         
     
     
 class Animal:
     
     def __init__(self, x, y, speed, e):
+        # coordinates
         self.x = x
         self.y = y 
+        # movement speed and movement direction
         self.speed = speed
-        self.direction = random.random()*2*PI # random angle in radians
+        # random angle in radians
+        self.direction = random.random()*2*PI 
+        # polygon size
         self.radius = 7
+        # sex of the animal
         self.sex = random.choice(["m","w"])
 
+        # state booleans
         self.feed = False
         self.pregnant = False
         self.special = False
         
+        # storage for the target object
         self.target = None
+
+        # reference to the environment
         self.e = e
 
 
@@ -330,9 +441,12 @@ class Animal:
         y = self.y
         color = self.color
 
+        # draws a cricle one the canvas
         pygame.draw.circle(screen, color, (x,y), self.radius)
+        # gives the circle a black perimeter
         pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 2)
 
+        # draws a blue dot on the circle if the animal found enough food
         if self.feed == True:
             pygame.draw.circle(screen, Color("blue"),(x,y),1)
 
@@ -341,9 +455,13 @@ class Animal:
         '''
         Moves the object 
         '''
+        # displace the animal into the direction asigned to self.direction
+        # use of trigonometry to calculate the x and y displacement
         self.x += self.speed * math.cos(self.direction)
         self.y += self.speed * math.sin(self.direction)
 
+        # this section makes sure that if the animal disapears on one side of
+        # the window it reapears on the opposite side
         if self.x-self.radius > SIZE_X:
             self.x = 0
         elif self.x+self.radius < 0:
@@ -362,10 +480,21 @@ class Animal:
         self.direction += random_degree
         
     def change_dir_target(self):
+        '''
+        if a target exists, the direction of the animal is directed to the
+        target. The function calculates the angle between the horizontal line
+        of self and the line created by the center point of self and other.
+        Because math.tan only gives an angel between pi/2 and -pi/2 radians, 
+        the function has to check in what quadrant other is placed at. 
+        The movement direction becomes that angle then.
+        '''
         other = self.target
         dist = distance(self,other)
+        # x distance and y distance between self and other
         d_x = (other.x-self.x)/dist
         d_y = (other.y-self.y)/dist
+        # we know that tan(angle) = d_y / d_x
+        # so the angle is equal to arctan(d_y/d_x)
         try:
             self.direction = math.atan(d_y/d_x)
             if d_x < 0 and d_y > 0:
@@ -373,6 +502,9 @@ class Animal:
             elif d_x < 0 and d_y < 0:
                 self.direction+=PI
         except:
+            # atan is undefined when d_x is 0
+            # so in the except section we check whether the direction is pi/2
+            # or -pi/2
             if d_y >0:
                 self.direction = PI/2
             elif d_y < 0:
@@ -409,7 +541,7 @@ class Animal:
         '''
 
         if (self.check_collision(other) and not self.feed and 
-            not isinstance(other, Huge_sheep)):
+            not isinstance(other, HugeSheep)):
             self.feed = True
             self.e.remove_from_lst(other)
             self.e.reset_target()
@@ -430,7 +562,7 @@ class Animal:
                 for anim in (environment.sheep):
                     if anim.target == other:
                         counter += 1
-                    if counter > 3:
+                    if counter >= 3:
                         return
                 self.target = other
             
@@ -454,23 +586,46 @@ class Wolf(Animal):
         self.color = Color("Gray")
     
 
-class Huge_sheep(Animal):
+class HugeSheep(Animal):
 
     def __init__(self, x, y, speed, e):
+        # speed is halved for this animal
         Animal.__init__(self, x, y, speed//2, e)
         self.color = Color("lightblue")
+        self.food_count = 0
         self.special = True
+        # this animal is larger than the others
         self.radius += 3
+    
+    def eat(self,other):
+        '''
+        takes as input a food object 
+        checks if it collides, if so food objects gets removed and this 
+        objects feed attribute becomes true
+        '''
+
+        if (self.check_collision(other) and not self.feed):
+            # if self eats an animal the food counter increases
+            self.food_count += 1
+            self.e.remove_from_lst(other)
+            self.e.reset_target()
+            # this animal has only eaten enough if it found food twice.
+            if self.food_count >= 2:
+                self.feed = True
+            return True
+        return False 
             
 
-class Speed_wolf(Animal):
+class SpeedWolf(Animal):
 
     def __init__(self, x, y, speed, e):
         Animal.__init__(self, x, y, speed*2, e)
         self.color = Color("violetred")
+        # food_count variable is used to count how much the animal ate
         self.food_count = 0
         self.special = True
 
+    # modified eat method specifically for this animal
     def eat(self,other):
         '''
         takes as input a food object 
@@ -479,16 +634,59 @@ class Speed_wolf(Animal):
         '''
 
         if (self.check_collision(other) and not self.feed and 
-            not isinstance(other, Huge_sheep)):
+            not isinstance(other, HugeSheep)):
+            # if self eats an animal the food counter increases
             self.food_count += 1
             self.e.remove_from_lst(other)
             self.e.reset_target()
+            # this animal has only eaten enough if it found food twice.
             if self.food_count >= 2:
                 self.feed = True
             return True
         return False 
     
+
+class HelperSheep(Animal):
+
+    def __init__(self, x, y, speed, e):
+        Animal.__init__(self, x, y, speed, e)
+        self.color = Color("purple2")
+        self.special = True
+        self.assist = False
     
+    def assist_sheep(self,other):
+        '''
+        when two animals of the same type collide (Sheep)
+        if the helper found food and the other animal has not found food,
+        the helper can "give" some to the animal and help it survive but
+        the helper risks not having enough food himself to get through the
+        cycle
+        '''
+        if (self.feed == True and other.feed == False and 
+            self.check_collision(other) and isinstance(other,Sheep)):
+            
+            other.feed = True
+            self.assist = True
+            # 50% chance of not having enough food left
+            if random.random() > 0.5:
+                self.feed = False
+    
+    def eat(self, other):
+        '''
+        takes as input a food object
+        checks if it collides, if so food objects gets removed and this 
+        objects feed attribute becomes true
+        '''
+
+        if self.check_collision(other) and not self.feed:
+            self.feed = True
+            self.e.remove_from_lst(other)
+            self.e.reset_target()
+            self.assist = False
+            return True
+        return False 
+
+
 class Food:
     
     def __init__(self, x, y):
@@ -505,28 +703,41 @@ class Food:
         y = self.y
 
         pygame.draw.circle(screen, self.color, (x,y), self.radius)
-        pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 1)
-
-        
+        pygame.draw.circle(screen, Color("Black"), (x,y), self.radius, 1)  
 
 
 class Countdown:
     
     def __init__(self, e):
+        # countdown placement is given through constants
+        # this makes sure that the countdown is always positioned right
         self.x = SIZE_X *19 // 20
         self.y = SIZE_Y // 20
+
+        # goes form 0-100 indicating the progress of a cycle
         self.completion = 0
+        # counter of finished cycles
         self.num_finished_cycles = 0
+        # variable to reference the environmetn object
         self.environment = e
+        # the text box allows us the display a text below the object that
+        # indicates the number of the current cycle
         self.text_box = TextBox( f"Cycle_num = {self.num_finished_cycles+1}")
     
     def draw(self):
         '''
         displays the object onto the pygame screen
         '''
+
         d_r = pygame.draw.rect
         s_x, s_y, s_c = self.x, self.y, self.completion
+        # draws a gray rectangle in the top left corner of the window
         d_r(screen, Color("Gray"), (s_x,s_y,SIZE_X//36,SIZE_Y*0.6))
+
+        # draws a purple rectangle above the grey rectangle.
+        # it starts of small and increases size proportional to the cycle
+        # progression by using self.progress ass an indicator how large it
+        # should be made
         d_r(screen, Color("Purple"), (s_x,s_y,SIZE_X//36,SIZE_Y*0.6*s_c//100))
         self.text_box.display()
     
@@ -537,31 +748,29 @@ class Countdown:
         environment methodes check_birth, make_hungry, check_survival and rest 
         to 0%
         '''
-        
+        # this methode gets called each time 1% of the cycle is completed
+        # thus self.progression also get incremented by 1
         self.completion += 1
+
+        # beneath this condition lies everything that is supposed to happen
+        # once a cycle is finsihed
         if self.completion == 100:
+            # reselt the completion percentage to 0
             self.completion = 0
+
+            # increases the number of finsihed cycles
             self.num_finished_cycles += 1
+            
+            # calls all methods of the environment class that are relevant for
+            # the end of an cycle
             self.environment.end_of_cycle()    
+            
+            # text of the textbox is updated, containing the number of the
+            # current cycle
             self.text_box.change_txt(f"Cycle_num = {self.num_finished_cycles+1}")
             
-            num_of_food = len(environment.food)
-            num_of_n_wolves,num_of_speed_wolves = 0,0
-            num_of_n_sheep,num_of_huge_sheep = 0,0
-            for w in environment.wolves:
-                if w.special == False:
-                    num_of_n_wolves += 1
-                else:
-                    num_of_speed_wolves += 1
-            for s in environment.sheep:
-                if s.special == False:
-                    num_of_n_sheep += 1
-                else:
-                    num_of_huge_sheep += 1
-            num_of_cycle = environment.cycle_obj.num_finished_cycles
-
-            add_information([num_of_cycle,num_of_n_sheep,num_of_huge_sheep,
-                             num_of_n_wolves,num_of_speed_wolves,num_of_food])
+            # gets  a list of information on simualtion, then adds it to a dictionary.
+            add_information(environment.create_info_lst())
 
 
 class TextBox:
@@ -615,7 +824,6 @@ for i in range(sim_const["initial_wolves"]):
 for i in range(sim_const["food_cap"]):
     environment.add_Food()
 
-
 # Visualisation and computation loop
 while not end:
     
@@ -640,6 +848,7 @@ while not end:
 
     #animal behaviour methods execution
     environment.eat_All()
+    environment.check_assist()
     environment.check_mate_all()
     
     if every_x_seconds(sim_const["cycle_duration"]/(sim_const["sim_speed"]*100)):
