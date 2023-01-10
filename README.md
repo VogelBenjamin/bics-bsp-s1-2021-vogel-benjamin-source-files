@@ -13,5 +13,5 @@ Download the python source code and open it in a code interpreter.
 
 #### In case of an error:
 After making sure that the python version in use is identical to the version it was produced in. (3.10.7)
-Please view the requirements.txt file.
+Please view the requirements.txt file. Please download the file and input "pip install -r requirements.txt". This should make sure that your python environment is identical to the one this software was produced in.
 
