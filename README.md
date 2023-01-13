@@ -19,5 +19,3 @@ Download the python source code and open it in a code interpreter.
 After making sure that the python version in use is identical to the version it was produced in. (3.10.7)
 Please view the requirements.txt file. Please download the file and input "pip install -r requirements.txt". This should make sure that your python environment is identical to the one this software was produced in.
 
-## BSP project report
-To view the source code of the LaTeX file of this projects report. Pease download the "report-source" zip file and open it in the overleaf application. 
